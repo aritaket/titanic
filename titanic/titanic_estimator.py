@@ -1,4 +1,4 @@
-""" click_estimator code.
+""" Writing my first randomforest code.
 Author : Yuzuru Kato
 Date : 25th Jan 2015
 """
@@ -21,21 +21,54 @@ from tools import *
 import network2
 from network_plot import *
 
+
+def pre_processing_for_titanic(train_df):
+    """pre-processes the train dataframe.
+    pram train_df:train dataframe.
+    """
+    # I need to convert all strings to integer classifiers.
+    # I need to fill in the missing values of the data and make it complete.
+
+    # female = 0, Male = 1
+    train_df['Gender'] = train_df['Sex'].map(
+        {'female': 0, 'male': 1}).astype(int)
+
+    # Embarked from 'C', 'Q', 'S'
+    # Note this is not ideal: in translating categories to numbers, Port "2"
+    # is not 2 times greater than Port "1", etc.
+
+    # All missing Embarked -> just make them embark from most common place
+    if len(train_df.Embarked[train_df.Embarked.isnull()]) > 0:
+        train_df.Embarked[
+            train_df.Embarked.isnull()] = \
+            train_df.Embarked.dropna().mode().values
+
+    # determine all values of Embarked,
+    Ports = list(enumerate(np.unique(train_df['Embarked'])))
+    # set up a dictionary in the form  Ports : index
+    Ports_dict = {name: i for i, name in Ports}
+    train_df.Embarked = train_df.Embarked.map(lambda x: Ports_dict[x]).astype(
+        int)     # Convert all Embark strings to int
+
+    # All the ages with no data -> make the median of all Ages
+    median_age = train_df['Age'].dropna().median()
+    if len(train_df.Age[train_df.Age.isnull()]) > 0:
+        train_df.loc[(train_df.Age.isnull()), 'Age'] = median_age
+    return train_df
+
 # ------------
 # Define Parameters
 
-# Sets parameters
-TR_NUM = 5000       # Number Of Train data Size to be red
-# TE_NUM = 1000;    # Number Of Test data Size to be red
-# SUB_NUM = 1000;   # Number Of Submission data to be red
-CUT_TEST_NUM = TR_NUM / 10  # Number of test data size
+# Set parameters
+CUT_TEST_NUM = 100  # Number Of test data Size
 
-# Define Estimatior
+# NAMEs for Estimator
 EST_RF = 0
 EST_SVC = 1
 EST_LOGREG = 2
 EST_NN = 3
-EST = EST_NN
+
+EST = EST_RF  # Define Estimatior
 
 # For RF,SVC,LOGREG:Whether or not GridSearchCV is performed (currently
 # only for SVC)
@@ -47,7 +80,7 @@ DIMRED_PCA = 1
 DIMRED_LDA = 2
 DIMRED = DIMRED_NONE
 
-pca_num = 5
+pca_num = 2
 lda_num = 5
 
 # Wheather daata is impblanced or not(performs SMOTE or not)
@@ -55,51 +88,30 @@ IMBALANCE = False
 
 # ------------
 # Reads DATA
-
-# When you use "chunksize" specifier, pandas reads data as TextReader
-train_reader = pd.read_csv("train.csv", header=0, chunksize=TR_NUM)
-# #test_reader = pd.read_csv("test.csv", header=0, chunksize=TE_NUM)
-# #sub_reader = pd.read_csv("sampleSubmission.csv", header=0,
-# #chunksize=SUB_NUM)
-
-# Transform TextReader into Data Frame
-train_df = train_reader.get_chunk(TR_NUM)
-# #test_df = test_reader.get_chunk(TE_NUM);
-# #sub_df = sub_reader.get_chunk(SUB_NUM);
-
-# Output data to visualize the ratio of ON and OFF for each unique value
-# in each variable
-VISUALIZE = False
-PLOT = False
-if VISUALIZE:
-    output_data(train_df, PLOT)
+# Load the train file into a dataframe
+train_df = pd.read_csv('train.csv', header=0)
 
 # ------------
 # Pre-Processing
 
-# Transform data frame into numpy array
-# Collects train_Y_data, test(true)_Y_data,ids
-train_Y_data = train_df['click'].values[:-CUT_TEST_NUM]
-test_Y_data = train_df['click'].values[-CUT_TEST_NUM:]
-ids = train_df['id'].values[-CUT_TEST_NUM:]
+# Pre-processes the data frame
+train_df = pre_processing_for_titanic(train_df)
 
-# Remove "id" and "click" which are not used in training data
-train_df = train_df.drop(['id', 'click'], axis=1)
+# Collect the train_srvs, test(true)_srvs,ids
+train_Y_data = train_df['Survived'].values[:-CUT_TEST_NUM]
+test_Y_data = train_df['Survived'].values[-CUT_TEST_NUM:]
+ids = train_df['PassengerId'].values[-CUT_TEST_NUM:]
 
-# Drop unused varialbes
-used_variables_list = ['C16', 'C15', 'C18', 'C20', 'C14', 'C17', 'C19']
-# #used_variables_list = ['site_category','app_category', 'device_type']
-# #used_variables_list = ['C16', 'C18']
-train_df = drop_unused_variables(train_df, used_variables_list)
+# Remove the Name column, Cabin, Ticket, and Sex (since I copied and
+# filled it to Gender), PassengerId, and Survived
+train_df = train_df.drop(
+    ['Name', 'Sex', 'Ticket', 'Cabin', 'PassengerId', 'Survived'], axis=1)
 
-# Converts object into numerical values
-converts_obj_to_num(train_df)
+# Left only two parameters(Pclass,Age,SibSp,Parch,Fare,Embarked,Gender)
+# #train_df = train_df.drop(['Pclass', 'SibSp',
+# #             'Parch', 'Gender','Embarked'], axis=1)
 
-# Chnge values into binary data
-for j in range(0, len(used_variables_list)):
-    train_df = values_to_binary(train_df, used_variables_list[j])
-
-# Get TRAIN DATA and Test DATA
+# Get TRAIN DATA and TEST DATA
 train_X_data = train_df.values[:-CUT_TEST_NUM, :]
 test_X_data = train_df.values[-CUT_TEST_NUM:, :]
 
@@ -111,6 +123,10 @@ if IMBALANCE:
     train_X_data, train_Y_data = get_smote(
         train_X_data, train_Y_data, O_N, O_k, U_N)
 
+# For Debug
+# #print(len(train_srvs[train_srvs == 0]))
+# #print(len(train_srvs[train_srvs == 1]))
+
 # Performs dimention reduction
 if(DIMRED == DIMRED_PCA):
     train_X_data, test_X_data = get_pca(train_X_data, test_X_data, pca_num)
@@ -118,6 +134,7 @@ if(DIMRED == DIMRED_PCA):
 if(DIMRED == DIMRED_LDA):
     train_X_data, test_X_data = get_lda(
         lda_num, train_X_data, test_X_data, train_Y_data)
+
 
 # ------------
 # Estimation
@@ -249,12 +266,9 @@ if(EST != EST_NN):
     print('Predicting...')
     prd_Y_data = est.predict(test_X_data).astype(int)
 
-# ------------
-# Output and Evaluation
-
 predictions_file = open("EstimationResult.csv", "w", newline='')
 open_file_object = csv.writer(predictions_file)
-open_file_object.writerow(["id", "Prd_click", "Tr_click"])
+open_file_object.writerow(["PassengerId", "PredictedSurvived", "TrueSurvived"])
 open_file_object.writerows(zip(ids, prd_Y_data, test_Y_data))
 predictions_file.close()
 
@@ -268,4 +282,14 @@ get_evaluation(test_Y_data, prd_Y_data, [True, True, True, False, False])
 # Plots SVC result
 if(EST == EST_SVC and DIMRED == DIMRED_PCA and pca_num == 2):
     plot_svc_result(train_X_data, test_X_data, est)
+
 print('Done...')
+
+"""
+LOGREGL2:
+array([[-0.59046734, -0.0225814 , -0.30679091,  0.05951638,  0.00259083,
+        -0.04371637, -2.46999059]])
+LOGREGL1:
+[-0.800, -0.03, -0.31, 0.02, 0.0,
+-0.08, -2.66]
+"""
