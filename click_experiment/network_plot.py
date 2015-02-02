@@ -29,9 +29,9 @@ def make_plots(filename, num_epochs,
     plot_test_cost(test_cost, num_epochs, test_cost_xmin)
     plot_training_accuracy(training_accuracy, num_epochs,
                            training_accuracy_xmin, training_set_size)
-    plot_overlay(test_accuracy, training_accuracy, num_epochs,
-                 min(test_accuracy_xmin, training_accuracy_xmin),
-                 test_set_size, training_set_size)
+    # plot_overlay(test_accuracy, training_accuracy, num_epochs,
+    #             min(test_accuracy_xmin, training_accuracy_xmin),
+    #            test_set_size, training_set_size)
 
 
 def plot_training_cost(training_cost, num_epochs, training_cost_xmin):

@@ -3,7 +3,7 @@ Author : Yuzuru Kato
 Date : 25th Jan 2015
 """
 
-# Third party library
+# third party library
 import pandas as pd
 import numpy as np
 import csv as csv
@@ -13,33 +13,43 @@ from sklearn import svm
 from sklearn import linear_model
 from sklearn import grid_search
 import json
+from sklearn import tree
+from sklearn.naive_bayes import GaussianNB
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.naive_bayes import BernoulliNB
 
-# My library
+# my library
 from tools import *
 
-# Neilsen's library
+# neilsen's library
 import network2
 from network_plot import *
 
 # ------------
-# Define Parameters
+# define parameters
 
-# Sets parameters
-TR_NUM = 5000       # Number Of Train data Size to be red
+# sets parameters
+TR_NUM = 500       # Number Of Train data Size to be red
 # TE_NUM = 1000;    # Number Of Test data Size to be red
 # SUB_NUM = 1000;   # Number Of Submission data to be red
 CUT_TEST_NUM = TR_NUM / 10  # Number of test data size
 
-# Define Estimatior
-EST_RF = 0
-EST_SVC = 1
-EST_LOGREG = 2
-EST_NN = 3
+# defines estimatior
+EST_TR = 0
+EST_RF = 1
+EST_NB = 2
+EST_SVC = 3
+EST_LOGREG = 4
+EST_NN = 5
 EST = EST_NN
 
-# For RF,SVC,LOGREG:Whether or not GridSearchCV is performed (currently
-# only for SVC)
-GSCV = False
+NB_GA = 0
+NB_MT = 1
+NB_BE = 2
+NB = NB_BE
+
+# Whether or not GridSearchCV is performed
+GSCV = True
 
 # Whether or not PCA or LDA is performed
 DIMRED_NONE = 0
@@ -50,8 +60,8 @@ DIMRED = DIMRED_NONE
 pca_num = 5
 lda_num = 5
 
-# Wheather daata is impblanced or not(performs SMOTE or not)
-IMBALANCE = False
+# Wheather data is imblanced or not(performs SMOTE or not)
+IMBALANCE = True
 
 # ------------
 # Reads DATA
@@ -62,7 +72,7 @@ train_reader = pd.read_csv("train.csv", header=0, chunksize=TR_NUM)
 # #sub_reader = pd.read_csv("sampleSubmission.csv", header=0,
 # #chunksize=SUB_NUM)
 
-# Transform TextReader into Data Frame
+# transforms textReader into data frame
 train_df = train_reader.get_chunk(TR_NUM)
 # #test_df = test_reader.get_chunk(TE_NUM);
 # #sub_df = sub_reader.get_chunk(SUB_NUM);
@@ -77,37 +87,41 @@ if VISUALIZE:
 # ------------
 # Pre-Processing
 
-# Transform data frame into numpy array
+# Transforms data frame into numpy array
 # Collects train_Y_data, test(true)_Y_data,ids
 train_Y_data = train_df['click'].values[:-CUT_TEST_NUM]
 test_Y_data = train_df['click'].values[-CUT_TEST_NUM:]
 ids = train_df['id'].values[-CUT_TEST_NUM:]
 
-# Remove "id" and "click" which are not used in training data
+# Removes "id" and "click" which are not used in training data
 train_df = train_df.drop(['id', 'click'], axis=1)
 
-# Drop unused varialbes
-used_variables_list = ['C16', 'C15', 'C18', 'C20', 'C14', 'C17', 'C19']
-# #used_variables_list = ['site_category','app_category', 'device_type']
-# #used_variables_list = ['C16', 'C18']
-train_df = drop_unused_variables(train_df, used_variables_list)
+# Drops unused varialbes (uses all data currently)
+# used_variables_list = list(train_df)
+# used_variables_list = ['site_category','app_category', 'device_type']
+# train_df = drop_unused_variables(train_df, used_variables_list)
 
 # Converts object into numerical values
-converts_obj_to_num(train_df)
+converts_to_num(train_df)
+converted_variables_list = ['C16', 'C15', 'C18',
+                            'C20', 'C17', 'C19', 'C1', 'C21',
+                            'site_domain', 'app_domain',
+                            'device_type', 'device_conn_type',
+                            'banner_pos']
 
-# Chnge values into binary data
-for j in range(0, len(used_variables_list)):
-    train_df = values_to_binary(train_df, used_variables_list[j])
+# chnge values into binary data
+for j in range(0, len(converted_variables_list)):
+    train_df = values_to_binary(train_df, converted_variables_list[j])
 
-# Get TRAIN DATA and Test DATA
+# gets TRAIN DATA and Test DATA
 train_X_data = train_df.values[:-CUT_TEST_NUM, :]
 test_X_data = train_df.values[-CUT_TEST_NUM:, :]
 
-# Performs over_sampling and under_sampling
+# performs over_sampling and under_sampling
 if IMBALANCE:
-    O_N = 200
+    O_N = 300
     O_k = 4
-    U_N = 80
+    U_N = 60
     train_X_data, train_Y_data = get_smote(
         train_X_data, train_Y_data, O_N, O_k, U_N)
 
@@ -121,6 +135,22 @@ if(DIMRED == DIMRED_LDA):
 
 # ------------
 # Estimation
+if(EST == EST_TR):
+    print('Decision Training...')
+    if GSCV:
+        print('With GridSearchCV...')
+
+        parameters = {'max_depth': (1000, 5000, 10000)}
+        est = tree.DecisionTreeClassifier()
+        est = grid_search.GridSearchCV(est, parameters)
+        est = est.fit(train_X_data, train_Y_data)
+
+        print("Best parameters set found on development set:")
+        print()
+        print(est.best_estimator_)
+    else:
+        est = tree.DecisionTreeClassifier()
+        est = est.fit(train_X_data, train_Y_data)
 
 if(EST == EST_RF):
     print('Random Forst Training...')
@@ -138,6 +168,38 @@ if(EST == EST_RF):
     else:
         est = RandomForestClassifier(n_estimators=100)
         est = est.fit(train_X_data, train_Y_data)
+
+if(EST == EST_NB):
+    print('Naive Bayes...')
+    if(NB == NB_GA):
+        est = GaussianNB()
+        est = est.fit(train_X_data, train_Y_data)
+    if(NB == NB_MT):
+        if GSCV:
+            print('With GridSearchCV...')
+            parameters = {'alpha': (0, 0.5, 1)}
+            est = MultinomialNB()
+            est = grid_search.GridSearchCV(est, parameters)
+            print("Best parameters set found on development set:")
+            print()
+            # print(est.best_estimator_)
+            est = est.fit(train_X_data, train_Y_data)
+        else:
+            est = MultinomialNB()
+            est = est.fit(train_X_data, train_Y_data)
+    if(NB == NB_BE):
+        if GSCV:
+            print('With GridSearchCV...')
+            parameters = {'alpha': (0, 0.5, 1)}
+            est = BernoulliNB()
+            est = grid_search.GridSearchCV(est, parameters)
+            print("Best parameters set found on development set:")
+            print()
+            # print(est.best_estimator_)
+            est = est.fit(train_X_data, train_Y_data)
+        else:
+            est = BernoulliNB()
+            est = est.fit(train_X_data, train_Y_data)
 
 elif(EST == EST_LOGREG):
     print('Logistic Regression Training...')
@@ -190,7 +252,7 @@ elif(EST == EST_NN):
     # Initialize Neural Network
     # #net = network.Network([len(train_X_data[0]), 50, 2])
     net = network2.Network(
-        [len(train_X_data[0]), 10, 2], cost=network2.CrossEntropyCost())
+        [len(train_X_data[0]), 30, 2], cost=network2.CrossEntropyCost())
 
     # Reshape Data for net.SGD
     temp_tr_X_data = []
@@ -210,40 +272,27 @@ elif(EST == EST_NN):
     train_list = list(zip(temp_tr_X_data, temp_tr_Y_data))
     test_list = list(zip(temp_ts_X_data, test_Y_data))
 
-    """
-    //data_type example for SGD(from minst example)
-    >>> tr_1 = list(tr_1)
-    >>> te_1 = list(te_1)
-    >>> tr_1[0][0].shape
-    (784, 1)
-    >>> tr_1[0][1].shape
-    (10, 1)
-    >>> te_1[0][1].shape
-    ()
-    >>> tr_1[0][1].shape
-    (10, 1)
-    >>>
-    """
-    # Let evaluation_data in net.SGD be test list when you plots graphs later
+    # Let evaluation_data in net.SGD be test_list when you plots graphs
     # #net.SGD(train_list, 20, 10, 2, MULTI_FLAG, test_data=test_list)
+    epoch = 100
     test_cost, test_accuracy, training_cost, training_accuracy = \
-        net.SGD(train_list, 5, 20, 0.2, lmbda=1.0,
+        net.SGD(train_list, epoch, 20, 0.001, lmbda=3.0,
                 evaluation_data=test_list,
                 monitor_evaluation_accuracy=True,
                 monitor_evaluation_cost=True,
                 monitor_training_accuracy=True,
-                monitor_training_cost=True)
+                monitor_training_cost=True,
+                )
 
     f = open("net_data.json", "w")
     json.dump([test_cost, test_accuracy, training_cost, training_accuracy], f)
     f.close()
 
-    make_plots("net_data.json", 5,
+    make_plots("net_data.json", epoch,
                0, 0, 0, 0, len(test_Y_data), len(train_Y_data))
 
     print('Predicting...')
     prd_Y_data = net.prd_Y_data
-
 
 if(EST != EST_NN):
     print('Predicting...')
