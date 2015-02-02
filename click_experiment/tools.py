@@ -32,30 +32,31 @@ from sklearn.neighbors import NearestNeighbors
 # for pre processing
 
 
-def converts_obj_to_num(train_df):
+def converts_to_num(train_df):
     """converts objects into numerical values
-    the train dataframe.Currently, pro-processing is performed
-    to data which have dtypes other than 'int64'; but it is
-    supposed that data which has 'int 32', 'float 32', 'float 64'
-    also not be preprocessed.param train_df:train dataframe.
+    param train_df: training_dataframe
     return: pre_processed train_df
     """
     for i in range(0, len(list(train_df))):
         key = list(train_df)[i]
-        if(train_df[key].dtypes == 'int64'):
-            TY_INT = True
-        else:
-            TY_INT = False
+        # in case when integer and float data are not covnverted
+# #        if(train_df[key].dtypes == 'int64'
+# #           or train_df[key].dtypes == 'int32'
+# #           or train_df[key].dtypes == 'float64'
+# #           or train_df[key].dtypes == 'float32'
+# #           ):
+# #            TY_NUM = True
+# #        else:
+# #            TY_NUM = False
+# #        # print("{0}:{1}".format(Key,TY_INT))
+# #        # Converts string to int
+# #        if not TY_NUM:
+        Ports = list(enumerate(np.unique(train_df[key])))
+        Ports_dict = {name: i for i, name in Ports}
 
-        # print("{0}:{1}".format(Key,TY_INT))
-        # Converts string to int
-        if not TY_INT:
-            Ports = list(enumerate(np.unique(train_df[key])))
-            Ports_dict = {name: i for i, name in Ports}
-
-            # Converts each value in each variable into indexs in the variable.
-            train_df[key] = train_df[key].map(
-                lambda x: Ports_dict[x]).astype(int)
+        # Converts each value in each variable into indexs in the variable.
+        train_df[key] = train_df[key].map(
+            lambda x: Ports_dict[x]).astype(int)
     return train_df
 
 
@@ -73,7 +74,6 @@ def values_to_binary(train_df, key):
     key_np = np.zeros(
         len(train_df[key]) * len(Ports)).reshape(len(train_df[key]),
                                                  len(Ports))
-
     # insert 1 where each value exists
     train_np = train_df[key].values
     for j in range(0, len(Ports)):
@@ -178,7 +178,7 @@ def under_sampling(T, N):
             i += 1
         # if(i % 1000 == 0):
         #    print(i)
-    print(zero_one_mat)
+    # print(zero_one_mat)
     T = T[zero_one_mat == 1, :]
     return T
 

@@ -33,7 +33,8 @@ class QuadraticCost:
         ``y``.
 
         """
-        return 0.5 * np.linalg.norm(a - y) ** 2
+        value = 0.5 * np.linalg.norm(a - y) ** 2
+        return value
 
     @staticmethod
     def delta(z, a, y):
@@ -69,7 +70,7 @@ class CrossEntropyCost:
 # Main Network class
 class Network():
 
-    def __init__(self, sizes, cost=CrossEntropyCost):
+    def __init__(self, sizes, cost=CrossEntropyCost, mom_coef=None):
         """The list ``sizes`` contains the number of neurons in the respective
         layers of the network.  For example, if the list was [2, 3, 1]
         then it would be a three-layer network, with the first layer
@@ -82,10 +83,10 @@ class Network():
         """
         self.num_layers = len(sizes)
         self.sizes = sizes
-        self.default_weight_initializer()
+        self.default_weight_initializer(mom_coef)
         self.cost = cost
 
-    def default_weight_initializer(self):
+    def default_weight_initializer(self, mom_coef=None):
         """Initialize each weight using a Gaussian distribution with mean 0
         and standard deviation 1 over the square root of the number of
         weights connecting to the same neuron.  Initialize the biases
@@ -101,8 +102,10 @@ class Network():
         self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
         self.weights = [np.random.randn(y, x) / np.sqrt(x)
                         for x, y in zip(self.sizes[:-1], self.sizes[1:])]
+        if mom_coef:
+            self.velocity = 0
 
-    def large_weight_initializer(self):
+    def large_weight_initializer(self, mom_coef=None):
         """Initialize the weights using a Gaussian distribution with mean 0
         and standard deviation 1.  Initialize the biases using a
         Gaussian distribution with mean 0 and standard deviation 1.
@@ -121,6 +124,8 @@ class Network():
         self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
         self.weights = [np.random.randn(y, x)
                         for x, y in zip(self.sizes[:-1], self.sizes[1:])]
+        if mom_coef:
+            self.velocity = 0
 
     def feedforward(self, a):
         """Return the output of the network if ``a`` is input."""
@@ -134,7 +139,8 @@ class Network():
             monitor_evaluation_cost=False,
             monitor_evaluation_accuracy=False,
             monitor_training_cost=False,
-            monitor_training_accuracy=False):
+            monitor_training_accuracy=False,
+            mom_coef=None):
         """Train the neural network using mini-batch stochastic gradient
         descent.  The ``training_data`` is a list of tuples ``(x, y)``
         representing the training inputs and the desired outputs.  The
@@ -146,7 +152,7 @@ class Network():
         appropriate flags.  The method returns a tuple containing four
         lists: the (per-epoch) costs on the evaluation data, the
         accuracies on the evaluation data, the costs on the training
-        data, and the accuracies on the training data.  All values are
+        data, and the accuracies on the training data.  All values  are
         evaluated at the end of each training epoch.  So, for example,
         if we train for 30 epochs, then the first element of the tuple
         will be a 30-element list containing the cost on the
@@ -166,7 +172,7 @@ class Network():
                 for k in range(0, n, mini_batch_size)]
             for mini_batch in mini_batches:
                 self.update_mini_batch(
-                    mini_batch, eta, lmbda, len(training_data))
+                    mini_batch, eta, lmbda, len(training_data), mom_coef=None)
             print("Epoch %s training complete" % j)
             if monitor_training_cost:
                 cost = self.total_cost(training_data, lmbda)
@@ -190,7 +196,7 @@ class Network():
         return evaluation_cost, evaluation_accuracy, \
             training_cost, training_accuracy
 
-    def update_mini_batch(self, mini_batch, eta, lmbda, n):
+    def update_mini_batch(self, mini_batch, eta, lmbda, n, mom_coef=None):
         """Update the network's weights and biases by applying gradient
         descent using backpropagation to a single mini batch.  The
         ``mini_batch`` is a list of tuples ``(x, y)``, ``eta`` is the
@@ -204,8 +210,18 @@ class Network():
             delta_nabla_b, delta_nabla_w = self.backprop(x, y)
             nabla_b = [nb + dnb for nb, dnb in zip(nabla_b, delta_nabla_b)]
             nabla_w = [nw + dnw for nw, dnw in zip(nabla_w, delta_nabla_w)]
-        self.weights = [(1 - eta * (lmbda / n)) * w - (eta / len(mini_batch))
-                        * nw for w, nw in zip(self.weights, nabla_w)]
+
+        # Exsistence of mom_coef means we use momentum based GD
+        if mom_coef:
+            self.velocity = mom_coef * self.velocity - \
+                (eta / len(mini_batch)) * nw
+            self.weights = [(1 - eta * (lmbda / n)) * w + self.velocity
+                            for w, nw in zip(self.weights, nabla_w)]
+        else:
+            self.weights = [(1 - eta * (lmbda / n)) * w -
+                            (eta / len(mini_batch))
+                            * nw for w, nw in zip(self.weights, nabla_w)]
+
         self.biases = [b - (eta / len(mini_batch)) * nb
                        for b, nb in zip(self.biases, nabla_b)]
 
